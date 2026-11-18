@@ -1,711 +1,143 @@
-<!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Leitor de Taxímetro AI</title>
-    <!-- Carregando Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carregando Fonte Inter e JetBrains Mono para números -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
-    <!-- Ícones Lucide -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Tesseract.js para OCR Local Robustíssimo (Fallback offline) -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        taxi: {
-                            yellow: '#FACC15',
-                            dark: '#09090B',
-                            card: '#18181B',
-                            border: '#27272A'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            background-color: #09090B;
-            color: #FAFAFA;
-            -webkit-tap-highlight-color: transparent;
-        }
-        @keyframes scanline {
-            0% { top: 5%; opacity: 0; }
-            15% { opacity: 1; }
-            85% { opacity: 1; }
-            100% { top: 95%; opacity: 0; }
-        }
-        .animate-scan {
-            animation: scanline 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-        }
-        .led-glow {
-            text-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#075e45">
+<title>Pix do Táxi</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#14231d;background:#f3f7f5}
+*{box-sizing:border-box}body{margin:0;padding:20px}.wrap{max-width:620px;margin:auto}
+header{background:#075e45;color:white;padding:22px;border-radius:18px;margin-bottom:16px}
+h1{margin:0 0 6px;font-size:1.55rem}header p{margin:0;color:#d8eee5}
+.card{background:white;border:1px solid #dce8e2;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 4px 16px #143b2610}
+h2{font-size:1.1rem;margin:0 0 12px}.muted{color:#5b6b63;font-size:.92rem}
+video,canvas{width:100%;border-radius:12px;background:#101915;display:block;max-height:360px;object-fit:cover}
+canvas{display:none}button{border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:1rem;cursor:pointer;background:#087a57;color:white}
+button.secondary{background:#e7f1ec;color:#075e45}button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.actions button{flex:1}
+label{display:block;font-weight:650;margin:12px 0 6px}input{width:100%;padding:13px;border:1px solid #bdcec4;border-radius:10px;font-size:1.1rem}
+.amount{font-size:1.8rem;font-weight:800}.status{margin-top:10px;color:#075e45;min-height:1.3em}
+#qr{display:flex;justify-content:center;padding:16px}#qr canvas,#qr img{width:240px!important;height:240px!important;max-height:none;background:white}
+.payload{font-size:.78rem;overflow-wrap:anywhere;background:#f2f6f3;padding:10px;border-radius:8px}
+.hidden{display:none}.warning{font-size:.88rem;color:#77551b;background:#fff7df;padding:12px;border-radius:10px}
+footer{font-size:.82rem;color:#607168;text-align:center;padding:12px}
+</style>
 </head>
-<body class="min-h-screen flex flex-col justify-between selection:bg-yellow-400 selection:text-black">
-
-    <!-- Cabeçalho Compacto -->
-    <header class="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-            <div class="bg-yellow-400 text-zinc-950 p-2 rounded-xl shadow-lg shadow-yellow-400/20">
-                <i data-lucide="car-taxi-front" class="w-5 h-5 stroke-[2.5]"></i>
-            </div>
-            <div>
-                <h1 class="font-bold text-base tracking-tight leading-none text-white">Leitor de Taxímetro</h1>
-                <p class="text-xs text-zinc-400 mt-0.5">IA + Fallback OCR Local</p>
-            </div>
-        </div>
-        
-        <div class="flex items-center gap-2">
-            <button id="btnToggleCamera" onclick="toggleCamera()" title="Reiniciar/Trocar Câmera" class="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white active:scale-95 transition">
-                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-            </button>
-            <label for="fileInput" class="cursor-pointer flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 hover:bg-zinc-800 active:scale-95 transition text-xs font-semibold">
-                <i data-lucide="image-plus" class="w-4 h-4 text-yellow-400"></i>
-                <span>Galeria</span>
-            </label>
-            <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileUpload(event)">
-        </div>
-    </header>
-
-    <!-- Conteúdo Principal -->
-    <main class="flex-1 w-full max-w-lg mx-auto p-4 flex flex-col gap-4">
-
-        <!-- Notificação / Mensagem de Erro Amigável -->
-        <div id="toastBanner" class="hidden rounded-2xl p-3.5 text-sm font-medium flex items-start gap-3 border transition-all duration-300">
-            <i id="toastIcon" data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5"></i>
-            <div class="flex-1" id="toastMessage">Mensagem</div>
-            <button onclick="hideToast()" class="text-current opacity-70 hover:opacity-100 p-0.5">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-        </div>
-
-        <!-- Container da Câmera / Preview da Foto -->
-        <section class="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-800 shadow-2xl">
-            
-            <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
-            <img id="capturedPreview" alt="Preview do Taxímetro" class="hidden w-full h-full object-contain bg-black" />
-            <canvas id="captureCanvas" class="hidden"></canvas>
-
-            <!-- Guia Visual (Overlay de Enquadramento) -->
-            <div id="cameraOverlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
-                <div class="w-full max-w-[92%] h-[78%] border-2 border-dashed border-yellow-400/80 rounded-2xl relative flex flex-col justify-between p-3 bg-yellow-400/[0.03] shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                    <div class="absolute -top-0.5 -left-0.5 w-6 h-6 border-t-4 border-l-4 border-yellow-400 rounded-tl-xl"></div>
-                    <div class="absolute -top-0.5 -right-0.5 w-6 h-6 border-t-4 border-r-4 border-yellow-400 rounded-tr-xl"></div>
-                    <div class="absolute -bottom-0.5 -left-0.5 w-6 h-6 border-b-4 border-l-4 border-yellow-400 rounded-bl-xl"></div>
-                    <div class="absolute -bottom-0.5 -right-0.5 w-6 h-6 border-b-4 border-r-4 border-yellow-400 rounded-br-xl"></div>
-
-                    <div id="scanLine" class="hidden absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_12px_#ef4444] animate-scan"></div>
-
-                    <div class="flex justify-between items-start gap-2">
-                        <span class="bg-black/75 backdrop-blur-sm text-zinc-200 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/10">
-                            Enquadre o taxímetro aqui
-                        </span>
-                        <div class="border border-red-500/60 bg-red-500/10 rounded-lg px-2.5 py-1 text-right">
-                            <span class="block text-[9px] uppercase tracking-wider text-red-300 font-bold">R$ PREÇO A PAGAR</span>
-                            <span class="font-mono text-xs text-red-400 font-bold">00.00</span>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-between items-end">
-                        <div class="border border-amber-400/50 bg-amber-400/10 rounded-lg px-2 py-1">
-                            <span class="block text-[9px] uppercase tracking-wider text-amber-300 font-bold">TARIFA</span>
-                            <span class="font-mono text-xs text-amber-400 font-bold">1 / 2</span>
-                        </div>
-                        <span class="text-[11px] text-zinc-300 bg-black/70 px-2 py-0.5 rounded-md">
-                            Evite reflexos no visor
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Fallback Câmera Indisponível -->
-            <div id="cameraFallback" class="hidden absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center p-6 text-center">
-                <div class="w-14 h-14 rounded-2xl bg-zinc-800 flex items-center justify-center mb-3 text-yellow-400">
-                    <i data-lucide="camera-off" class="w-7 h-7"></i>
-                </div>
-                <h3 class="font-bold text-base text-white">Câmera não iniciada</h3>
-                <p id="cameraErrorText" class="text-xs text-zinc-400 mt-1 max-w-xs">
-                    Permita o acesso à câmera ou selecione uma foto da galeria.
-                </p>
-                <div class="flex gap-2 mt-4">
-                    <button onclick="startCamera()" class="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition">
-                        Tentar Novamente
-                    </button>
-                    <label for="fileInput" class="cursor-pointer px-4 py-2.5 rounded-xl bg-yellow-400 text-zinc-950 text-xs font-bold hover:bg-yellow-300 transition">
-                        Escolher Foto
-                    </label>
-                </div>
-            </div>
-
-            <!-- Overlay de Carregamento -->
-            <div id="loadingOverlay" class="hidden absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-20">
-                <div class="w-12 h-12 border-4 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin mb-3"></div>
-                <p id="loadingText" class="font-bold text-sm text-white">Lendo dígitos do taxímetro...</p>
-                <p class="text-xs text-zinc-400 mt-1">Analisando imagem com IA e OCR</p>
-            </div>
-        </section>
-
-        <!-- Botões Principais -->
-        <div class="grid grid-cols-1 gap-2.5">
-            <button id="btnCapture" onclick="captureAndRead()" class="w-full py-4 px-6 rounded-2xl bg-yellow-400 hover:bg-yellow-300 active:scale-[0.99] text-zinc-950 font-extrabold text-base sm:text-lg shadow-xl shadow-yellow-400/15 flex items-center justify-center gap-3 transition">
-                <i data-lucide="scan-line" class="w-6 h-6 stroke-[2.5]"></i>
-                <span>Capturar e Ler Taxímetro</span>
-            </button>
-
-            <button id="btnRetake" onclick="resetToLiveCamera()" class="hidden w-full py-3 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 active:scale-[0.99] text-zinc-100 font-semibold text-sm flex items-center justify-center gap-2 transition border border-zinc-700">
-                <i data-lucide="camera" class="w-4 h-4 text-yellow-400"></i>
-                <span>Voltar para Câmera ao Vivo</span>
-            </button>
-        </div>
-
-        <!-- Card de Resultado (Sempre editável manualmente) -->
-        <section id="resultCard" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-xl transition-all">
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    Valor e Tarifa (Editável se necessário)
-                </span>
-                <span id="confidenceBadge" class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
-                    Aguardando captura
-                </span>
-            </div>
-
-            <div class="grid grid-cols-3 gap-3 mb-4">
-                <div class="col-span-2 bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex flex-col justify-between">
-                    <div class="flex items-center justify-between">
-                        <label for="extractedValueInput" class="text-[11px] font-semibold text-zinc-400 uppercase">Valor (ex: 63.50)</label>
-                        <span id="formattedCurrency" class="text-xs font-semibold text-emerald-400">R$ 0,00</span>
-                    </div>
-                    <div class="flex items-baseline gap-1 mt-1">
-                        <input 
-                            type="text" 
-                            id="extractedValueInput" 
-                            inputmode="decimal"
-                            placeholder="0.00" 
-                            value=""
-                            oninput="onManualValueEdit(this.value)"
-                            class="w-full bg-transparent font-mono text-3xl sm:text-4xl font-bold text-red-500 led-glow focus:outline-none focus:ring-2 focus:ring-yellow-400/50 rounded-lg px-1 -mx-1"
-                        />
-                    </div>
-                    <span class="text-[10px] text-zinc-500 mt-1">Toque para corrigir caso a luz reflita no LED</span>
-                </div>
-
-                <div class="col-span-1 bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex flex-col justify-between">
-                    <label for="extractedTariffInput" class="text-[11px] font-semibold text-zinc-400 uppercase">Tarifa</label>
-                    <input 
-                        type="text" 
-                        id="extractedTariffInput" 
-                        placeholder="1" 
-                        value=""
-                        class="w-full bg-transparent font-mono text-3xl sm:text-4xl font-bold text-amber-400 text-center focus:outline-none focus:ring-2 focus:ring-yellow-400/50 rounded-lg my-auto"
-                    />
-                    <span class="text-[10px] text-zinc-500 text-center">Bandeira</span>
-                </div>
-            </div>
-
-            <button id="btnCopyValue" onclick="copyCurrentValue()" class="w-full py-3.5 px-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-zinc-950 font-bold text-base flex items-center justify-center gap-2.5 transition shadow-lg shadow-emerald-500/10">
-                <i id="copyIcon" data-lucide="copy" class="w-5 h-5 stroke-[2.5]"></i>
-                <span id="copyBtnText">Copiar Valor (ex: 63.50)</span>
-            </button>
-        </section>
-
-        <!-- Histórico Rápido -->
-        <section class="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-4">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                    <i data-lucide="history" class="w-4 h-4 text-yellow-400"></i>
-                    Histórico desta Sessão
-                </h2>
-                <button id="btnClearHistory" onclick="clearHistory()" class="hidden text-xs text-zinc-500 hover:text-red-400 transition">
-                    Limpar
-                </button>
-            </div>
-
-            <div id="historyList" class="space-y-2">
-                <p id="emptyHistoryText" class="text-xs text-zinc-500 text-center py-4">
-                    Nenhuma leitura realizada ainda.
-                </p>
-            </div>
-        </section>
-
-    </main>
-
-    <footer class="text-center py-4 px-4 text-[11px] text-zinc-600">
-        Leitor Inteligente de Taxímetro com OCR Local e Fallback de IA.
-    </footer>
-
-    <script>
-        lucide.createIcons();
-
-        let currentStream = null;
-        let usingFrontCamera = false;
-        let sessionHistory = [];
-        const apiKey = ""; 
-
-        const videoEl = document.getElementById('cameraVideo');
-        const previewEl = document.getElementById('capturedPreview');
-        const canvasEl = document.getElementById('captureCanvas');
-        const overlayEl = document.getElementById('cameraOverlay');
-        const fallbackEl = document.getElementById('cameraFallback');
-        const loadingEl = document.getElementById('loadingOverlay');
-        const loadingTextEl = document.getElementById('loadingText');
-        const scanLineEl = document.getElementById('scanLine');
-        const btnCapture = document.getElementById('btnCapture');
-        const btnRetake = document.getElementById('btnRetake');
-        const valueInput = document.getElementById('extractedValueInput');
-        const tariffInput = document.getElementById('extractedTariffInput');
-        const formattedCurrencyEl = document.getElementById('formattedCurrency');
-        const confidenceBadgeEl = document.getElementById('confidenceBadge');
-
-        function showToast(message, type = 'info') {
-            const banner = document.getElementById('toastBanner');
-            const msgEl = document.getElementById('toastMessage');
-            const iconEl = document.getElementById('toastIcon');
-
-            banner.classList.remove('hidden', 'bg-red-950/80', 'border-red-800', 'text-red-200', 'bg-emerald-950/80', 'border-emerald-800', 'text-emerald-200', 'bg-zinc-900', 'border-zinc-700', 'text-zinc-200');
-
-            if (type === 'error') {
-                banner.classList.add('bg-red-950/80', 'border-red-800', 'text-red-200');
-                iconEl.setAttribute('data-lucide', 'alert-circle');
-            } else if (type === 'success') {
-                banner.classList.add('bg-emerald-950/80', 'border-emerald-800', 'text-emerald-200');
-                iconEl.setAttribute('data-lucide', 'check-circle-2');
-            } else {
-                banner.classList.add('bg-zinc-900', 'border-zinc-700', 'text-zinc-200');
-                iconEl.setAttribute('data-lucide', 'info');
-            }
-
-            msgEl.textContent = message;
-            lucide.createIcons();
-        }
-
-        function hideToast() {
-            document.getElementById('toastBanner').classList.add('hidden');
-        }
-
-        async function startCamera() {
-            hideToast();
-            fallbackEl.classList.add('hidden');
-            previewEl.classList.add('hidden');
-            videoEl.classList.remove('hidden');
-            overlayEl.classList.remove('hidden');
-            btnRetake.classList.add('hidden');
-
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                showCameraError("Câmera indisponível neste navegador. Use o botão Galeria ou digite manualmente.");
-                return;
-            }
-
-            try {
-                currentStream = await navigator.mediaDevices.getUserMedia({
-                    audio: false,
-                    video: {
-                        facingMode: usingFrontCamera ? 'user' : { ideal: 'environment' },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
-                videoEl.srcObject = currentStream;
-                await videoEl.play();
-            } catch (err) {
-                try {
-                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    videoEl.srcObject = currentStream;
-                    await videoEl.play();
-                } catch (fallbackErr) {
-                    showCameraError("Acesso à câmera negado ou indisponível. Você pode enviar uma foto da galeria ou digitar o valor no campo abaixo.");
-                }
-            }
-        }
-
-        function showCameraError(msg) {
-            videoEl.classList.add('hidden');
-            overlayEl.classList.add('hidden');
-            fallbackEl.classList.remove('hidden');
-            document.getElementById('cameraErrorText').textContent = msg;
-        }
-
-        function toggleCamera() {
-            usingFrontCamera = !usingFrontCamera;
-            startCamera();
-        }
-
-        function resetToLiveCamera() {
-            previewEl.classList.add('hidden');
-            btnRetake.classList.add('hidden');
-            if (currentStream && currentStream.active) {
-                videoEl.classList.remove('hidden');
-                overlayEl.classList.remove('hidden');
-            } else {
-                startCamera();
-            }
-        }
-
-        async function captureAndRead() {
-            if (!previewEl.classList.contains('hidden') && previewEl.src.startsWith('data:image')) {
-                const base64Data = previewEl.src.split(',')[1];
-                const mimeType = previewEl.src.substring(5, previewEl.src.indexOf(';'));
-                await processImage(base64Data, mimeType, previewEl.src);
-                return;
-            }
-
-            if (!videoEl.srcObject || videoEl.readyState < 2) {
-                showToast("A câmera não está pronta. Envie uma foto pela galeria ou digite manualmente.", "error");
-                return;
-            }
-
-            const width = videoEl.videoWidth;
-            const height = videoEl.videoHeight;
-            canvasEl.width = width;
-            canvasEl.height = height;
-
-            const ctx = canvasEl.getContext('2d');
-            ctx.drawImage(videoEl, 0, 0, width, height);
-
-            const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
-            const base64Data = dataUrl.split(',')[1];
-
-            previewEl.src = dataUrl;
-            previewEl.classList.remove('hidden');
-            videoEl.classList.add('hidden');
-            overlayEl.classList.add('hidden');
-            btnRetake.classList.remove('hidden');
-
-            await processImage(base64Data, 'image/jpeg', dataUrl);
-        }
-
-        function handleFileUpload(event) {
-            const file = event.target.files?.[0];
-            if (!file) return;
-
-            hideToast();
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const img = new Image();
-                img.onload = async function() {
-                    const maxDim = 1800;
-                    let w = img.width;
-                    let h = img.height;
-                    if (w > maxDim || h > maxDim) {
-                        if (w > h) {
-                            h = Math.round((h * maxDim) / w);
-                            w = maxDim;
-                        } else {
-                            w = Math.round((w * maxDim) / h);
-                            h = maxDim;
-                        }
-                    }
-
-                    canvasEl.width = w;
-                    canvasEl.height = h;
-                    const ctx = canvasEl.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-
-                    const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
-                    const base64Data = dataUrl.split(',')[1];
-
-                    previewEl.src = dataUrl;
-                    previewEl.classList.remove('hidden');
-                    videoEl.classList.add('hidden');
-                    overlayEl.classList.add('hidden');
-                    fallbackEl.classList.add('hidden');
-                    btnRetake.classList.remove('hidden');
-
-                    await processImage(base64Data, 'image/jpeg', dataUrl);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-            event.target.value = '';
-        }
-
-        /**
-         * Processamento em duas etapas: Tenta Gemini API; se falhar, executa OCR local (Tesseract.js)
-         */
-        async function processImage(base64ImageData, mimeType, dataUrl) {
-            setLoadingState(true, "Analisando com IA...");
-            hideToast();
-
-            let success = false;
-
-            // 1. TENTATIVA COM GEMINI API
-            try {
-                const promptText = `Analise esta imagem de um taxímetro digital brasileiro. Identifique o valor monetário exibido no visor principal em LED vermelho (ex: 63.50) e o número da tarifa (ex: 1). Retorne um JSON estrito com as chaves: "encontrado" (boolean), "valor" (string com ponto decimal e duas casas, ex: "63.50"), "tarifa" (string).`;
-
-                const payload = {
-                    contents: [
-                        {
-                            role: "user",
-                            parts: [
-                                { text: promptText },
-                                { inlineData: { mimeType: mimeType, data: base64ImageData } }
-                            ]
-                        }
-                    ],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: {
-                            type: "OBJECT",
-                            properties: {
-                                encontrado: { type: "BOOLEAN" },
-                                valor: { type: "STRING" },
-                                tarifa: { type: "STRING" }
-                            },
-                            required: ["encontrado", "valor", "tarifa"]
-                        }
-                    }
-                };
-
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-                const data = await fetchWithBackoff(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (rawText) {
-                    const parsed = JSON.parse(rawText);
-                    if (parsed.encontrado && parsed.valor) {
-                        applyExtractedResult(parsed.valor, parsed.tarifa, "IA Gemini");
-                        success = true;
-                    }
-                }
-            } catch (aiErr) {
-                console.warn("Gemini falhou, acionando OCR local...", aiErr);
-            }
-
-            // 2. FALLBACK COM OCR LOCAL (Tesseract.js) caso a IA não tenha retornado com sucesso
-            if (!success) {
-                try {
-                    setLoadingText("Executando OCR local (Tesseract)...");
-                    const result = await Tesseract.recognize(dataUrl, 'eng', {
-                        logger: m => {}
-                    });
-
-                    const text = result.data.text || "";
-                    // Regex para encontrar valores com padrão de preço (ex: 63.50, 12,40, 150.00)
-                    const matches = text.match(/\d+[\.,]\d{2}/g);
-
-                    if (matches && matches.length > 0) {
-                        let val = matches[0].replace(',', '.');
-                        applyExtractedResult(val, "1", "OCR Local");
-                        success = true;
-                    } else {
-                        // Tenta extrair qualquer número sequencial
-                        const digits = text.replace(/\D/g, '');
-                        if (digits.length >= 3) {
-                            // Ex: 6350 vira 63.50
-                            const formatted = (parseInt(digits.slice(0, -2)) || 0) + '.' + digits.slice(-2);
-                            applyExtractedResult(formatted, "1", "OCR Aproximado");
-                            success = true;
-                        }
-                    }
-                } catch (tessErr) {
-                    console.warn("OCR local também falhou", tessErr);
-                }
-            }
-
-            setLoadingState(false);
-
-            if (!success) {
-                confidenceBadgeEl.textContent = "Leitura manual recomendada";
-                confidenceBadgeEl.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-800";
-                showToast("Não foi possível ler automaticamente devido a reflexos. Digite o valor diretamente no campo abaixo.", "error");
-                valueInput.focus();
-            }
-        }
-
-        async function fetchWithBackoff(url, options, maxRetries = 3) {
-            let delay = 1000;
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    return await response.json();
-                } catch (err) {
-                    if (attempt === maxRetries - 1) throw err;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
-                }
-            }
-        }
-
-        function applyExtractedResult(valor, tarifa, sourceName) {
-            let cleanVal = valor.replace(',', '.').replace(/[^0-9.]/g, '');
-            if (cleanVal && !isNaN(parseFloat(cleanVal))) {
-                cleanVal = parseFloat(cleanVal).toFixed(2);
-            }
-
-            valueInput.value = cleanVal;
-            tariffInput.value = tarifa || "1";
-            updateFormattedCurrency(cleanVal);
-
-            confidenceBadgeEl.textContent = `Lido via ${sourceName}`;
-            confidenceBadgeEl.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800";
-
-            addToHistory(cleanVal, tarifa || "1");
-            document.getElementById('copyBtnText').textContent = `Copiar Valor (${cleanVal})`;
-        }
-
-        function setLoadingState(isLoading, text = "Lendo dígitos do taxímetro...") {
-            if (isLoading) {
-                loadingTextEl.textContent = text;
-                loadingEl.classList.remove('hidden');
-                scanLineEl.classList.remove('hidden');
-                btnCapture.disabled = true;
-                btnCapture.classList.add('opacity-60', 'cursor-not-allowed');
-            } else {
-                loadingEl.classList.add('hidden');
-                scanLineEl.classList.add('hidden');
-                btnCapture.disabled = false;
-                btnCapture.classList.remove('opacity-60', 'cursor-not-allowed');
-            }
-        }
-
-        function setLoadingText(text) {
-            loadingTextEl.textContent = text;
-        }
-
-        function onManualValueEdit(val) {
-            const normalized = val.replace(',', '.');
-            updateFormattedCurrency(normalized);
-            const displayVal = normalized.trim() || '0.00';
-            document.getElementById('copyBtnText').textContent = `Copiar Valor (${displayVal})`;
-        }
-
-        function updateFormattedCurrency(numericString) {
-            const num = parseFloat(numericString);
-            if (!isNaN(num)) {
-                formattedCurrencyEl.textContent = num.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                });
-            } else {
-                formattedCurrencyEl.textContent = 'R$ 0,00';
-            }
-        }
-
-        function copyTextToClipboard(text, buttonFeedback = true) {
-            if (!text) {
-                showToast("Digite ou capture um valor para copiar.", "error");
-                return;
-            }
-
-            const tempInput = document.createElement('textarea');
-            tempInput.value = text;
-            tempInput.style.position = 'fixed';
-            tempInput.style.opacity = '0';
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            tempInput.setSelectionRange(0, 99999);
-
-            try {
-                document.execCommand('copy');
-                if (buttonFeedback) {
-                    const btn = document.getElementById('btnCopyValue');
-                    const btnText = document.getElementById('copyBtnText');
-                    const originalText = btnText.textContent;
-
-                    btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400');
-                    btn.classList.add('bg-white', 'text-zinc-950');
-                    btnText.textContent = `Copiado! (${text})`;
-
-                    setTimeout(() => {
-                        btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
-                        btn.classList.remove('bg-white');
-                        btnText.textContent = originalText;
-                    }, 1800);
-                } else {
-                    showToast(`Valor "${text}" copiado com sucesso!`, "success");
-                }
-            } catch (err) {
-                showToast("Não foi possível copiar. Selecione o campo e copie manualmente.", "error");
-            } finally {
-                document.body.removeChild(tempInput);
-            }
-        }
-
-        function copyCurrentValue() {
-            const val = valueInput.value.trim().replace(',', '.');
-            copyTextToClipboard(val, true);
-        }
-
-        function addToHistory(valor, tarifa) {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            sessionHistory.unshift({
-                id: Date.now(),
-                valor,
-                tarifa,
-                time: timeStr
-            });
-
-            if (sessionHistory.length > 10) {
-                sessionHistory.pop();
-            }
-
-            renderHistory();
-        }
-
-        function renderHistory() {
-            const listEl = document.getElementById('historyList');
-            const clearBtn = document.getElementById('btnClearHistory');
-
-            if (sessionHistory.length === 0) {
-                clearBtn.classList.add('hidden');
-                listEl.innerHTML = `<p id="emptyHistoryText" class="text-xs text-zinc-500 text-center py-4">Nenhuma leitura realizada ainda.</p>`;
-                return;
-            }
-
-            clearBtn.classList.remove('hidden');
-            listEl.innerHTML = sessionHistory.map(item => `
-                <div class="flex items-center justify-between bg-zinc-950/90 border border-zinc-800/90 rounded-2xl px-3.5 py-2.5">
-                    <div class="flex items-center gap-3">
-                        <span class="font-mono text-lg font-bold text-red-400">${item.valor}</span>
-                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-400/10 text-amber-400 border border-amber-400/20">
-                            Tarifa ${item.tarifa}
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-2.5">
-                        <span class="text-[11px] text-zinc-500 font-mono">${item.time}</span>
-                        <button onclick="copyTextToClipboard('${item.valor}', false)" class="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white active:scale-95 transition border border-zinc-800" title="Copiar ${item.valor}">
-                            <i data-lucide="copy" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-
-            lucide.createIcons();
-        }
-
-        function clearHistory() {
-            sessionHistory = [];
-            renderHistory();
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            startCamera();
-        });
-    </script>
+<body>
+<div class="wrap">
+<header><h1>Pix do Táxi</h1><p>Fotografe o taxímetro, confira o valor e gere o QR Code Pix.</p></header>
+
+<section class="card">
+<h2>1. Fotografar o taxímetro</h2>
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+<div class="actions">
+<button id="start">Abrir câmera</button>
+<button id="capture" class="secondary" disabled>Fotografar</button>
+</div>
+<div class="actions">
+<button id="upload" class="secondary">Escolher uma foto</button>
+<input id="file" type="file" accept="image/*" capture="environment" class="hidden">
+</div>
+<p class="muted">Aponte a câmera para os números do valor da corrida, com boa iluminação.</p>
+<div id="status" class="status" aria-live="polite"></div>
+</section>
+
+<section class="card">
+<h2>2. Confira o valor da corrida</h2>
+<label for="amount">Valor em reais (corrija se a leitura estiver errada)</label>
+<input id="amount" inputmode="decimal" placeholder="Ex.: 23,50">
+<p class="muted">A leitura da foto é uma sugestão automática. Confira o valor antes de gerar a cobrança.</p>
+<button id="read" class="secondary" disabled>Ler valor da foto</button>
+</section>
+
+<section class="card">
+<h2>3. Gerar pagamento Pix</h2>
+<div class="muted">Chave Pix cadastrada neste site</div>
+<strong>77988331234</strong>
+<label for="merchant">Nome que aparecerá no Pix</label>
+<input id="merchant" value="TAXISTA" maxlength="25">
+<label for="city">Cidade</label>
+<input id="city" value="VITORIA DA CONQUISTA" maxlength="15">
+<div class="actions"><button id="generate">Gerar QR Code Pix</button></div>
+<div id="result" class="hidden">
+<div class="amount" id="shownAmount"></div>
+<div id="qr"></div>
+<p class="muted">Peça ao passageiro para escanear o QR Code no aplicativo do banco e conferir o destinatário e o valor antes de pagar.</p>
+<button id="copy" class="secondary">Copiar código Pix</button>
+<p id="payload" class="payload"></p>
+</div>
+</section>
+<div class="warning">Importante: este site gera um Pix com valor definido, mas não confirma se o pagamento caiu. Confira o recebimento no aplicativo do seu banco. A chave informada precisa estar cadastrada como chave Pix do tipo telefone.</div>
+<footer>Se a câmera não abrir, acesse este site por HTTPS ou localhost e autorize o uso da câmera.</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let stream=null, photo=null, pixCode='';
+function status(t){$('status').textContent=t}
+$('start').onclick=async()=>{
+ try{
+  if(!navigator.mediaDevices?.getUserMedia) throw new Error('Câmera indisponível. Abra por HTTPS ou localhost.');
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+  $('video').srcObject=stream;$('capture').disabled=false;status('Câmera pronta.');
+ }catch(e){status(e.message||'Não foi possível abrir a câmera. Verifique a permissão.')}
+};
+$('capture').onclick=()=>{
+ const v=$('video'),c=$('canvas');if(!v.videoWidth)return;
+ c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+ photo=c.toDataURL('image/jpeg',.92);c.style.display='block';$('read').disabled=false;status('Foto capturada. Agora leia o valor.');
+};
+$('upload').onclick=()=>$('file').click();
+$('file').onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ const img=new Image();img.onload=()=>{const c=$('canvas');const scale=Math.min(1,1600/img.width);c.width=img.width*scale;c.height=img.height*scale;c.getContext('2d').drawImage(img,0,0,c.width,c.height);photo=c.toDataURL('image/jpeg',.92);c.style.display='block';$('read').disabled=false;status('Foto carregada. Agora leia o valor.');URL.revokeObjectURL(img.src)};img.src=URL.createObjectURL(f);
+};
+function parseMoney(text){
+ const matches=[...text.matchAll(/(?:R\s*\$?\s*)?(\d{1,4}[.,]\d{2})/gi)];
+ if(matches.length){let s=matches[matches.length-1][1];return s.replace(/\./g,'').replace(',','.')}
+ const digits=text.replace(/\D/g,'');if(digits.length>=3){return (Number(digits)/100).toFixed(2)}return null;
+}
+$('read').onclick=async()=>{
+ if(!photo)return;status('Lendo a foto… aguarde.');
+ $('read').disabled=true;
+ try{
+  const result=await Tesseract.recognize(photo,'por+eng',{logger:m=>{if(m.status==='recognizing text')status('Reconhecendo números: '+Math.round(m.progress*100)+'%')}});
+  const raw=result.data.text||'';const value=parseMoney(raw);
+  if(value){$('amount').value=value.replace('.',',');status('Leitura sugerida: R$ '+value.replace('.',',')+'. Confira antes de gerar o Pix.')}
+  else status('Não encontrei um valor com segurança. Digite o valor manualmente.');
+ }catch(e){status('Não foi possível ler a foto. Digite o valor manualmente.')}
+ $('read').disabled=false;
+};
+function clean(s,max){return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,'').trim().slice(0,max)}
+function tlv(id,value){return id+String(value.length).padStart(2,'0')+value}
+function crc16(payload){let crc=0xFFFF;for(let i=0;i<payload.length;i++){crc^=payload.charCodeAt(i)<<8;for(let j=0;j<8;j++)crc=(crc&0x8000)?((crc<<1)^0x1021):(crc<<1);crc&=0xFFFF}return crc.toString(16).toUpperCase().padStart(4,'0')}
+function makePix(amount){
+ const key='+5577988331234';
+ const name=clean($('merchant').value,25)||'TAXISTA';
+ const city=clean($('city').value,15)||'VITORIA DA CONQUISTA';
+ const gui=tlv('00','br.gov.bcb.pix')+tlv('01',key);
+ const mai=tlv('26',gui);
+ const additional=tlv('05','***');
+ let p=tlv('00','01')+tlv('01','11')+mai+tlv('52','0000')+tlv('53','986')+tlv('54',amount)+tlv('58','BR')+tlv('59',name)+tlv('60',city)+tlv('62',additional)+'6304';
+ return p+crc16(p);
+}
+$('generate').onclick=async()=>{
+ const raw=$('amount').value.trim().replace(/\s/g,'').replace(/\./g,'').replace(',','.');
+ const n=Number(raw);
+ if(!raw||!Number.isFinite(n)||n<=0||n>999999.99){alert('Digite um valor válido, por exemplo 23,50.');return}
+ if(!$('merchant').value.trim()||!$('city').value.trim()){alert('Preencha o nome e a cidade.');return}
+ pixCode=makePix(n.toFixed(2));
+ $('shownAmount').textContent='R$ '+n.toFixed(2).replace('.',',');
+ $('qr').innerHTML='';
+ try{await QRCode.toCanvas(pixCode,{width:240,margin:2,errorCorrectionLevel:'M'},(err,canvas)=>{if(err)throw err;$('qr').appendChild(canvas)})}
+ catch(e){alert('Não foi possível gerar o QR Code. Verifique sua conexão.');return}
+ $('payload').textContent=pixCode;$('result').classList.remove('hidden');
+};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(pixCode);$('copy').textContent='Código copiado!';setTimeout(()=>$('copy').textContent='Copiar código Pix',1800)}catch(e){alert('Não foi possível copiar automaticamente. Selecione e copie o código exibido abaixo do QR Code.')}};
+window.addEventListener('beforeunload',()=>{if(stream)stream.getTracks().forEach(t=>t.stop())});
+</script>
 </body>
 </html>
