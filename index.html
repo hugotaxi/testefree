@@ -1,295 +1,433 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0f172a">
-    <title>Controle de Abastecimento - Táxi</title>
-    
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Bootstrap CSS & Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    
-    <!-- SweetAlert2 -->
-    <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-    <style>
-        :root {
-            --bg-body: #0f172a;
-            --bg-card: #1e293b;
-            --bg-card-hover: #334155;
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: rgba(255, 255, 255, 0.08);
-        }
-
-        body {
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        /* Cabeçalho Superior Fixo */
-        .app-header {
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-color);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            padding: 16px;
-        }
-
-        .header-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-        }
-
-        .btn-voltar {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            transition: 0.2s;
-        }
-
-        .btn-voltar:active {
-            transform: scale(0.95);
-        }
-
-        /* Painel de Resumo (KM e Saldo) */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .stat-box {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 12px 14px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .stat-label {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .stat-value-km {
-            font-size: 14px;
-            font-weight: 600;
-            color: #60a5fa;
-            cursor: pointer;
-        }
-
-        .stat-value-saldo {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--accent-green);
-        }
-
-        /* Lista de Abastecimentos */
-        .lista-container {
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding-bottom: 40px;
-        }
-
-        .section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin: 4px 0 2px 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* Estilização dos Cards Gerados pelo JS */
-        .meus_cards {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 14px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .meus_cards:active {
-            transform: scale(0.98);
-        }
-
-        .meus_cards.card-ativo {
-            border-color: var(--accent-blue);
-            background: linear-gradient(145deg, #1e293b 0%, #172554 100%);
-            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
-        }
-
-        .card-left {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .icon-wrapper {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
-            background: rgba(59, 130, 246, 0.15);
-            color: #60a5fa;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            flex-shrink: 0;
-        }
-
-        .card-info {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .titulo_meus_cards {
-            font-weight: 700;
-            font-size: 16px;
-            color: var(--text-main);
-        }
-
-        .subtitulo_meus_cards {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-
-        .card-right {
-            text-align: right;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
-        }
-
-        .badge-km {
-            background: rgba(255, 255, 255, 0.06);
-            color: #e2e8f0;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .tap-hint {
-            font-size: 10px;
-            color: #60a5fa;
-        }
-
-        /* Loader inicial */
-        #loading-spinner {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Taxímetro Pix</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, sans-serif;
+    background: #0f172a; color: #f1f5f9;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header {
+    padding: 14px 16px; background: #1e293b; text-align: center;
+    font-weight: 700; font-size: 18px; letter-spacing: .5px;
+  }
+  header span { color: #22c55e; }
+  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 520px; width: 100%; margin: 0 auto; }
+  .card { background: #1e293b; border-radius: 16px; padding: 14px; }
+  video, canvas#preview { width: 100%; border-radius: 12px; background: #000; display: block; }
+  video { aspect-ratio: 4/3; object-fit: cover; }
+  .hidden { display: none !important; }
+  button {
+    width: 100%; padding: 16px; border: none; border-radius: 14px;
+    font-size: 17px; font-weight: 700; cursor: pointer; transition: .15s;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: #22c55e; color: #052e16; }
+  .btn-secondary { background: #334155; color: #f1f5f9; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  label { font-size: 13px; color: #94a3b8; display: block; margin-bottom: 6px; }
+  input[type="number"], input[type="text"] {
+    width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #334155;
+    background: #0f172a; color: #f1f5f9; font-size: 22px; font-weight: 700; text-align: center;
+  }
+  input:focus { outline: none; border-color: #22c55e; }
+  .status { font-size: 14px; text-align: center; color: #94a3b8; min-height: 20px; }
+  .status.ok { color: #22c55e; }
+  .status.err { color: #ef4444; }
+  #qrBox { text-align: center; }
+  #qrBox canvas, #qrBox img { max-width: 260px; width: 100%; border-radius: 12px; background: #fff; padding: 10px; }
+  .pixCode {
+    font-family: monospace; font-size: 12px; word-break: break-all;
+    background: #0f172a; padding: 10px; border-radius: 10px; color: #94a3b8;
+    margin-top: 10px; max-height: 80px; overflow-y: auto;
+  }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .spinner {
+    width: 22px; height: 22px; border: 3px solid #334155; border-top-color: #22c55e;
+    border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .guide {
+    position: absolute; inset: 0; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .guide::after {
+    content: ""; width: 70%; height: 34%; border: 3px dashed #22c55e;
+    border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+  }
+  .videoWrap { position: relative; }
+</style>
 </head>
 <body>
+<header>Taxímetro <span>Pix</span></header>
+<main>
 
-<div id="loading-page-bb" style="opacity: 0; transition: opacity 0.3s ease;">
-    
-    <!-- Cabeçalho Moderno -->
-    <header class="app-header">
-        <div class="header-top">
-            <div class="d-flex align-items-center gap-2">
-                <a href="index.html" class="btn-voltar" title="Voltar ao início">
-                    <i class="bi bi-arrow-left"></i>
-                </a>
-                <div>
-                    <h1 class="h6 mb-0 fw-bold">Abastecimentos</h1>
-                    <small style="color: var(--text-muted); font-size: 11px;">Toque em um card para ver o saldo</small>
-                </div>
-            </div>
-            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2 py-1">
-                <i class="bi bi-fuel-pump-fill me-1"></i> Táxi
-            </span>
-        </div>
+  <!-- Etapa 1: Câmera -->
+  <section id="stepCamera">
+    <div class="card">
+      <div class="videoWrap">
+        <video id="video" playsinline autoplay muted></video>
+        <div class="guide"></div>
+      </div>
+      <p class="status" id="camStatus">Enquadre o valor do taxímetro no retângulo e toque em Fotografar.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn-primary" id="btnStart">📷 Abrir câmera</button>
+        <button class="btn-secondary" id="btnCapture" disabled>Fotografar</button>
+      </div>
+    </div>
+  </section>
 
-        <!-- Cards de Indicadores (Mantendo os IDs originais text_1 e txtsaldo) -->
-        <div class="dashboard-grid">
-            <div class="stat-box">
-                <span class="stat-label"><i class="bi bi-speedometer2 text-primary"></i> Autonomia</span>
-                <span id="text_1" class="stat-value-km">Calculando Km...</span>
-            </div>
-            <div class="stat-box">
-                <span class="stat-label"><i class="bi bi-cash-coin text-success"></i> Renda no Período</span>
-                <span id="txtsaldo" class="stat-value-saldo">R$ 0,00</span>
-            </div>
-        </div>
-    </header>
+  <!-- Etapa 2: Processando -->
+  <section id="stepProcessing" class="hidden">
+    <div class="card" style="text-align:center">
+      <canvas id="preview"></canvas>
+      <div class="spinner" style="margin:16px auto"></div>
+      <p class="status" id="ocrStatus">Lendo o valor...</p>
+    </div>
+  </section>
 
-    <!-- Container da Lista (Mantendo o ID original telaabastecimento) -->
-    <main class="lista-container">
-        <div class="section-title">
-            <span>HISTÓRICO RECENTE</span>
-            <i class="bi bi-clock-history"></i>
-        </div>
-        
-        <div id="loading-spinner">
-            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-            Carregando abastecimentos...
-        </div>
+  <!-- Etapa 3: Valor -->
+  <section id="stepValue" class="hidden">
+    <div class="card">
+      <label for="valor">Valor da corrida (R$)</label>
+      <input type="number" id="valor" inputmode="decimal" step="0.01" min="0" placeholder="0,00">
+      <p class="status" id="valueStatus"></p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn-secondary" id="btnRetake">Tirar outra</button>
+        <button class="btn-primary" id="btnGenerate" disabled>Gerar Pix</button>
+      </div>
+    </div>
+  </section>
 
-        <div id="telaabastecimento" style="display: flex; flex-direction: column; gap: 12px; width: 100%;"></div>
-    </main>
+  <!-- Etapa 4: QR Code -->
+  <section id="stepQR" class="hidden">
+    <div class="card">
+      <div id="qrBox"></div>
+      <div class="pixCode" id="pixCode"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn-secondary" id="btnCopy">Copiar código</button>
+        <button class="btn-primary" id="btnNew">Nova corrida</button>
+      </div>
+      <p class="status ok" id="qrStatus" style="margin-top:10px">Mostre o QR Code para o passageiro.</p>
+    </div>
+  </section>
 
-</div>
+</main>
 
-<!-- Scripts Originais -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/7.21.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/7.21.0/firebase-database.js"></script>
-<script src="https://www.gstatic.com/firebasejs/7.15.5/firebase-auth.js"></script>
+<script>
+// ============================================================
+// CONFIGURAÇÃO — edite aqui se precisar
+// ============================================================
+const PIX_CONFIG = {
+  key: "+5577988331234",   // chave Pix (telefone em formato internacional)
+  name: "TAXISTA",          // nome do recebedor (sem acentos, max 25)
+  city: "BRASIL",           // cidade (sem acentos, max 15)
+  description: "Corrida de taxi"
+};
 
-<!-- Seu JavaScript -->
-<script src="index.js?v=2.0"></script>
-<script src="https://bootsites.com.br/cdn/bootblocks@1.01/js/bootblocks.js"></script>
+// ============================================================
+// Estado
+// ============================================================
+let stream = null;
+let worker = null;
+let tesseractReady = false;
 
+const $ = (id) => document.getElementById(id);
+
+// ============================================================
+// Funções de UI
+// ============================================================
+function showStep(id) {
+  ["stepCamera", "stepProcessing", "stepValue", "stepQR"].forEach(s => {
+    $(s).classList.toggle("hidden", s !== id);
+  });
+}
+
+function setStatus(el, msg, type = "") {
+  el.textContent = msg;
+  el.className = "status" + (type ? " " + type : "");
+}
+
+// ============================================================
+// Câmera
+// ============================================================
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
+      audio: false
+    });
+    $("video").srcObject = stream;
+    $("btnStart").disabled = true;
+    $("btnCapture").disabled = false;
+    setStatus($("camStatus"), "Câmera ativa. Enquadre o valor e fotografe.");
+  } catch (err) {
+    setStatus($("camStatus"), "Erro ao abrir câmera: " + err.message, "err");
+  }
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  $("btnStart").disabled = false;
+  $("btnCapture").disabled = true;
+}
+
+// ============================================================
+// OCR com Tesseract.js
+// ============================================================
+async function initOCR() {
+  if (worker) return;
+  setStatus($("ocrStatus"), "Carregando motor de OCR (primeira vez pode demorar)...");
+  worker = await Tesseract.createWorker("eng", 1, {
+    logger: m => {
+      if (m.status === "recognizing text") {
+        setStatus($("ocrStatus"), `Lendo... ${Math.round((m.progress || 0) * 100)}%`);
+      }
+    }
+  });
+  // Configura para reconhecer apenas dígitos, ponto e vírgula
+  await worker.setParameters({
+    tessedit_char_whitelist: "0123456789.,",
+    tessedit_pageseg_mode: "7" // single line
+  });
+  tesseractReady = true;
+}
+
+async function captureAndRead() {
+  const video = $("video");
+  if (!video.videoWidth) return;
+
+  // Captura frame
+  const canvas = $("preview");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+
+  stopCamera();
+  showStep("stepProcessing");
+  setStatus($("ocrStatus"), "Preparando OCR...");
+
+  // Pré-processamento: recorta região central (onde está o guia) e converte para cinza/alto contraste
+  const crop = cropCenter(canvas, 0.7, 0.34);
+  const processed = preprocess(crop);
+
+  try {
+    await initOCR();
+    setStatus($("ocrStatus"), "Lendo o valor...");
+    const { data } = await worker.recognize(processed);
+    const raw = (data.text || "").trim();
+    console.log("OCR raw:", raw);
+    const valor = parseValor(raw);
+    goToValue(valor, raw);
+  } catch (err) {
+    console.error(err);
+    goToValue(null, "Erro no OCR: " + err.message);
+  }
+}
+
+// Recorta a região central (mesma do guia na tela)
+function cropCenter(canvas, wPct, hPct) {
+  const cw = canvas.width * wPct;
+  const ch = canvas.height * hPct;
+  const x = (canvas.width - cw) / 2;
+  const y = (canvas.height - ch) / 2;
+  const out = document.createElement("canvas");
+  out.width = cw;
+  out.height = ch;
+  out.getContext("2d").drawImage(canvas, x, y, cw, ch, 0, 0, cw, ch);
+  return out;
+}
+
+// Converte para escala de cinza + binarização simples
+function preprocess(srcCanvas) {
+  const c = document.createElement("canvas");
+  c.width = srcCanvas.width;
+  c.height = srcCanvas.height;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(srcCanvas, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    const v = gray > 128 ? 255 : 0;
+    d[i] = d[i+1] = d[i+2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+// Interpreta o texto do OCR como valor monetário
+function parseValor(text) {
+  if (!text) return null;
+  // Remove tudo que não for dígito, ponto ou vírgula
+  let t = text.replace(/[^0-9.,]/g, "");
+  // Casos: "12.50", "12,50", "1250", "12.5"
+  // Se tem vírgula e ponto, assume que o último é decimal
+  if (t.includes(",") && t.includes(".")) {
+    t = t.replace(/\./g, "").replace(",", ".");
+  } else if (t.includes(",")) {
+    t = t.replace(",", ".");
+  } else if (t.includes(".")) {
+    // Se o ponto estiver no meio e houver 1 ou 2 dígitos depois, é decimal
+    const parts = t.split(".");
+    if (parts.length === 2 && parts[1].length <= 2) {
+      // mantém
+    } else {
+      t = t.replace(/\./g, "");
+    }
+  } else {
+    // Só dígitos: assume centavos se >= 3 dígitos? Não — deixa como inteiro
+    // Ex: "1250" -> 12.50 é ambíguo. Vamos tratar como reais.
+    // Se você quiser assumir centavos, descomente:
+    // if (t.length >= 3) t = t.slice(0, -2) + "." + t.slice(-2);
+  }
+  const n = parseFloat(t);
+  if (isNaN(n) || n <= 0) return null;
+  // Limite de sanidade
+  if (n > 10000) return null;
+  return n;
+}
+
+function goToValue(valor, raw) {
+  showStep("stepValue");
+  const input = $("valor");
+  const status = $("valueStatus");
+  if (valor) {
+    input.value = valor.toFixed(2);
+    setStatus(status, `Valor lido: R$ ${valor.toFixed(2)}. Confira e ajuste se necessário.`, "ok");
+  } else {
+    input.value = "";
+    setStatus(status, "Não foi possível ler o valor. Digite manualmente.", "err");
+  }
+  $("btnGenerate").disabled = false;
+  setTimeout(() => input.focus(), 200);
+}
+
+// ============================================================
+// Geração do Pix (BR Code / EMV)
+// ============================================================
+function emv(id, value) {
+  const len = value.length.toString().padStart(2, "0");
+  return id + len + value;
+}
+
+function crc16(payload) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < payload.length; i++) {
+    crc ^= payload.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+
+function sanitize(s, max) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 ]/g, "").toUpperCase().slice(0, max);
+}
+
+function buildPixPayload({ key, name, city, amount, description }) {
+  // Merchant Account Information (ID 26)
+  const gui = emv("00", "br.gov.bcb.pix");
+  const chave = emv("01", key);
+  let mai = gui + chave;
+  if (description) mai += emv("02", sanitize(description, 40));
+  const maiField = emv("26", mai);
+
+  const payloadFormat = emv("00", "01");
+  const merchantCategory = emv("52", "0000");
+  const currency = emv("53", "986");
+  const amountField = emv("54", amount.toFixed(2));
+  const country = emv("58", "BR");
+  const merchantName = emv("59", sanitize(name, 25));
+  const merchantCity = emv("60", sanitize(city, 15));
+  const additional = emv("62", emv("05", "***")); // txid
+  const crcId = "6304";
+
+  const base = payloadFormat + maiField + merchantCategory + currency + amountField + country + merchantName + merchantCity + additional + crcId;
+  const crc = crc16(base);
+  return base + crc;
+}
+
+async function generateQR(amount) {
+  const payload = buildPixPayload({
+    key: PIX_CONFIG.key,
+    name: PIX_CONFIG.name,
+    city: PIX_CONFIG.city,
+    amount,
+    description: PIX_CONFIG.description
+  });
+  console.log("Pix payload:", payload);
+
+  const box = $("qrBox");
+  box.innerHTML = "";
+  const canvas = document.createElement("canvas");
+  box.appendChild(canvas);
+  await QRCode.toCanvas(canvas, payload, { width: 260, margin: 1, errorCorrectionLevel: "M" });
+
+  $("pixCode").textContent = payload;
+  return payload;
+}
+
+// ============================================================
+// Eventos
+// ============================================================
+$("btnStart").addEventListener("click", startCamera);
+$("btnCapture").addEventListener("click", captureAndRead);
+$("btnRetake").addEventListener("click", () => {
+  stopCamera();
+  showStep("stepCamera");
+  setStatus($("camStatus"), "Enquadre o valor do taxímetro e toque em Fotografar.");
+});
+$("btnGenerate").addEventListener("click", async () => {
+  const v = parseFloat($("valor").value);
+  if (isNaN(v) || v <= 0) {
+    setStatus($("valueStatus"), "Digite um valor válido.", "err");
+    return;
+  }
+  showStep("stepQR");
+  await generateQR(v);
+});
+$("btnCopy").addEventListener("click", async () => {
+  const code = $("pixCode").textContent;
+  try {
+    await navigator.clipboard.writeText(code);
+    setStatus($("qrStatus"), "Código Pix copiado!", "ok");
+  } catch {
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = code; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+    setStatus($("qrStatus"), "Código Pix copiado!", "ok");
+  }
+});
+$("btnNew").addEventListener("click", () => {
+  $("valor").value = "";
+  $("qrBox").innerHTML = "";
+  $("pixCode").textContent = "";
+  showStep("stepCamera");
+  setStatus($("camStatus"), "Enquadre o valor do taxímetro e toque em Fotografar.");
+  setStatus($("valueStatus"), "");
+  setStatus($("qrStatus"), "Mostre o QR Code para o passageiro.", "ok");
+});
+
+// Fallback: se a câmera não abrir, permite digitar direto
+window.addEventListener("load", () => {
+  showStep("stepCamera");
+});
+</script>
 </body>
 </html>
