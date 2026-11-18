@@ -1,433 +1,758 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Taxímetro Pix</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-<style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0; font-family: system-ui, -apple-system, sans-serif;
-    background: #0f172a; color: #f1f5f9;
-    display: flex; flex-direction: column; min-height: 100vh;
-  }
-  header {
-    padding: 14px 16px; background: #1e293b; text-align: center;
-    font-weight: 700; font-size: 18px; letter-spacing: .5px;
-  }
-  header span { color: #22c55e; }
-  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 520px; width: 100%; margin: 0 auto; }
-  .card { background: #1e293b; border-radius: 16px; padding: 14px; }
-  video, canvas#preview { width: 100%; border-radius: 12px; background: #000; display: block; }
-  video { aspect-ratio: 4/3; object-fit: cover; }
-  .hidden { display: none !important; }
-  button {
-    width: 100%; padding: 16px; border: none; border-radius: 14px;
-    font-size: 17px; font-weight: 700; cursor: pointer; transition: .15s;
-  }
-  button:active { transform: scale(.98); }
-  .btn-primary { background: #22c55e; color: #052e16; }
-  .btn-secondary { background: #334155; color: #f1f5f9; }
-  .btn-danger { background: #ef4444; color: #fff; }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  label { font-size: 13px; color: #94a3b8; display: block; margin-bottom: 6px; }
-  input[type="number"], input[type="text"] {
-    width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #334155;
-    background: #0f172a; color: #f1f5f9; font-size: 22px; font-weight: 700; text-align: center;
-  }
-  input:focus { outline: none; border-color: #22c55e; }
-  .status { font-size: 14px; text-align: center; color: #94a3b8; min-height: 20px; }
-  .status.ok { color: #22c55e; }
-  .status.err { color: #ef4444; }
-  #qrBox { text-align: center; }
-  #qrBox canvas, #qrBox img { max-width: 260px; width: 100%; border-radius: 12px; background: #fff; padding: 10px; }
-  .pixCode {
-    font-family: monospace; font-size: 12px; word-break: break-all;
-    background: #0f172a; padding: 10px; border-radius: 10px; color: #94a3b8;
-    margin-top: 10px; max-height: 80px; overflow-y: auto;
-  }
-  .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; }
-  .spinner {
-    width: 22px; height: 22px; border: 3px solid #334155; border-top-color: #22c55e;
-    border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .guide {
-    position: absolute; inset: 0; pointer-events: none;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .guide::after {
-    content: ""; width: 70%; height: 34%; border: 3px dashed #22c55e;
-    border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
-  }
-  .videoWrap { position: relative; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leitor de Taxímetro AI</title>
+    <!-- Carregando Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carregando Fonte Inter e JetBrains Mono para números -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+    <!-- Ícones Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        taxi: {
+                            yellow: '#FACC15',
+                            dark: '#09090B',
+                            card: '#18181B',
+                            border: '#27272A'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Estilos customizados para o visor da câmera e animações */
+        body {
+            background-color: #09090B;
+            color: #FAFAFA;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Animação da linha de scanner */
+        @keyframes scanline {
+            0% { top: 5%; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { top: 95%; opacity: 0; }
+        }
+        .animate-scan {
+            animation: scanline 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        /* Estilo de LED digital sutil */
+        .led-glow {
+            text-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
+        }
+    </style>
 </head>
-<body>
-<header>Taxímetro <span>Pix</span></header>
-<main>
+<body class="min-h-screen flex flex-col justify-between selection:bg-yellow-400 selection:text-black">
 
-  <!-- Etapa 1: Câmera -->
-  <section id="stepCamera">
-    <div class="card">
-      <div class="videoWrap">
-        <video id="video" playsinline autoplay muted></video>
-        <div class="guide"></div>
-      </div>
-      <p class="status" id="camStatus">Enquadre o valor do taxímetro no retângulo e toque em Fotografar.</p>
-      <div class="row" style="margin-top:12px">
-        <button class="btn-primary" id="btnStart">📷 Abrir câmera</button>
-        <button class="btn-secondary" id="btnCapture" disabled>Fotografar</button>
-      </div>
-    </div>
-  </section>
+    <!-- Cabeçalho Compacto -->
+    <header class="sticky top-0 z-30 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+            <div class="bg-yellow-400 text-zinc-950 p-2 rounded-xl shadow-lg shadow-yellow-400/20">
+                <i data-lucide="car-taxi-front" class="w-5 h-5 stroke-[2.5]"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base tracking-tight leading-none text-white">Leitor de Taxímetro</h1>
+                <p class="text-xs text-zinc-400 mt-0.5">Extração instantânea via IA</p>
+            </div>
+        </div>
+        
+        <!-- Botão para alternar câmera ou carregar foto -->
+        <div class="flex items-center gap-2">
+            <button id="btnToggleCamera" onclick="toggleCamera()" title="Reiniciar/Trocar Câmera" class="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white active:scale-95 transition">
+                <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+            <label for="fileInput" class="cursor-pointer flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 hover:bg-zinc-800 active:scale-95 transition text-xs font-semibold">
+                <i data-lucide="image-plus" class="w-4 h-4 text-yellow-400"></i>
+                <span>Galeria</span>
+            </label>
+            <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileUpload(event)">
+        </div>
+    </header>
 
-  <!-- Etapa 2: Processando -->
-  <section id="stepProcessing" class="hidden">
-    <div class="card" style="text-align:center">
-      <canvas id="preview"></canvas>
-      <div class="spinner" style="margin:16px auto"></div>
-      <p class="status" id="ocrStatus">Lendo o valor...</p>
-    </div>
-  </section>
+    <!-- Conteúdo Principal -->
+    <main class="flex-1 w-full max-w-lg mx-auto p-4 flex flex-col gap-4">
 
-  <!-- Etapa 3: Valor -->
-  <section id="stepValue" class="hidden">
-    <div class="card">
-      <label for="valor">Valor da corrida (R$)</label>
-      <input type="number" id="valor" inputmode="decimal" step="0.01" min="0" placeholder="0,00">
-      <p class="status" id="valueStatus"></p>
-      <div class="row" style="margin-top:12px">
-        <button class="btn-secondary" id="btnRetake">Tirar outra</button>
-        <button class="btn-primary" id="btnGenerate" disabled>Gerar Pix</button>
-      </div>
-    </div>
-  </section>
+        <!-- Notificação / Mensagem de Erro Amigável (Substitui alert) -->
+        <div id="toastBanner" class="hidden rounded-2xl p-3.5 text-sm font-medium flex items-start gap-3 border transition-all duration-300">
+            <i id="toastIcon" data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5"></i>
+            <div class="flex-1" id="toastMessage">Mensagem</div>
+            <button onclick="hideToast()" class="text-current opacity-70 hover:opacity-100 p-0.5">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
 
-  <!-- Etapa 4: QR Code -->
-  <section id="stepQR" class="hidden">
-    <div class="card">
-      <div id="qrBox"></div>
-      <div class="pixCode" id="pixCode"></div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn-secondary" id="btnCopy">Copiar código</button>
-        <button class="btn-primary" id="btnNew">Nova corrida</button>
-      </div>
-      <p class="status ok" id="qrStatus" style="margin-top:10px">Mostre o QR Code para o passageiro.</p>
-    </div>
-  </section>
+        <!-- Container da Câmera / Preview da Foto -->
+        <section class="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-800 shadow-2xl">
+            
+            <!-- Stream de Vídeo ao Vivo -->
+            <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            
+            <!-- Imagem Congelada (quando capturada ou enviada da galeria) -->
+            <img id="capturedPreview" alt="Preview do Taxímetro" class="hidden w-full h-full object-contain bg-black" />
 
-</main>
+            <!-- Canvas oculto para processar a imagem -->
+            <canvas id="captureCanvas" class="hidden"></canvas>
 
-<script>
-// ============================================================
-// CONFIGURAÇÃO — edite aqui se precisar
-// ============================================================
-const PIX_CONFIG = {
-  key: "+5577988331234",   // chave Pix (telefone em formato internacional)
-  name: "TAXISTA",          // nome do recebedor (sem acentos, max 25)
-  city: "BRASIL",           // cidade (sem acentos, max 15)
-  description: "Corrida de taxi"
-};
+            <!-- Guia Visual (Overlay de Enquadramento) -->
+            <div id="cameraOverlay" class="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
+                <!-- Escurecimento sutil ao redor -->
+                <div class="w-full max-w-[92%] h-[78%] border-2 border-dashed border-yellow-400/80 rounded-2xl relative flex flex-col justify-between p-3 bg-yellow-400/[0.03] shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                    
+                    <!-- Cantos reforçados -->
+                    <div class="absolute -top-0.5 -left-0.5 w-6 h-6 border-t-4 border-l-4 border-yellow-400 rounded-tl-xl"></div>
+                    <div class="absolute -top-0.5 -right-0.5 w-6 h-6 border-t-4 border-r-4 border-yellow-400 rounded-tr-xl"></div>
+                    <div class="absolute -bottom-0.5 -left-0.5 w-6 h-6 border-b-4 border-l-4 border-yellow-400 rounded-bl-xl"></div>
+                    <div class="absolute -bottom-0.5 -right-0.5 w-6 h-6 border-b-4 border-r-4 border-yellow-400 rounded-br-xl"></div>
 
-// ============================================================
-// Estado
-// ============================================================
-let stream = null;
-let worker = null;
-let tesseractReady = false;
+                    <!-- Linha de Scanner (ativa durante processamento) -->
+                    <div id="scanLine" class="hidden absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_12px_#ef4444] animate-scan"></div>
 
-const $ = (id) => document.getElementById(id);
+                    <!-- Indicações internas do visor -->
+                    <div class="flex justify-between items-start gap-2">
+                        <span class="bg-black/75 backdrop-blur-sm text-zinc-200 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-white/10">
+                            Enquadre o taxímetro aqui
+                        </span>
+                        <div class="border border-red-500/60 bg-red-500/10 rounded-lg px-2.5 py-1 text-right">
+                            <span class="block text-[9px] uppercase tracking-wider text-red-300 font-bold">R$ PREÇO A PAGAR</span>
+                            <span class="font-mono text-xs text-red-400 font-bold">00.00</span>
+                        </div>
+                    </div>
 
-// ============================================================
-// Funções de UI
-// ============================================================
-function showStep(id) {
-  ["stepCamera", "stepProcessing", "stepValue", "stepQR"].forEach(s => {
-    $(s).classList.toggle("hidden", s !== id);
-  });
-}
+                    <div class="flex justify-between items-end">
+                        <div class="border border-amber-400/50 bg-amber-400/10 rounded-lg px-2 py-1">
+                            <span class="block text-[9px] uppercase tracking-wider text-amber-300 font-bold">TARIFA</span>
+                            <span class="font-mono text-xs text-amber-400 font-bold">1 / 2</span>
+                        </div>
+                        <span class="text-[11px] text-zinc-300 bg-black/70 px-2 py-0.5 rounded-md">
+                            Evite reflexos no visor
+                        </span>
+                    </div>
+                </div>
+            </div>
 
-function setStatus(el, msg, type = "") {
-  el.textContent = msg;
-  el.className = "status" + (type ? " " + type : "");
-}
+            <!-- Estado de Câmera Indisponível / Fallback -->
+            <div id="cameraFallback" class="hidden absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center p-6 text-center">
+                <div class="w-14 h-14 rounded-2xl bg-zinc-800 flex items-center justify-center mb-3 text-yellow-400">
+                    <i data-lucide="camera-off" class="w-7 h-7"></i>
+                </div>
+                <h3 class="font-bold text-base text-white">Câmera não iniciada</h3>
+                <p id="cameraErrorText" class="text-xs text-zinc-400 mt-1 max-w-xs">
+                    Permita o acesso à câmera no navegador ou selecione uma foto da galeria abaixo.
+                </p>
+                <div class="flex gap-2 mt-4">
+                    <button onclick="startCamera()" class="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-white transition">
+                        Tentar Novamente
+                    </button>
+                    <label for="fileInput" class="cursor-pointer px-4 py-2.5 rounded-xl bg-yellow-400 text-zinc-950 text-xs font-bold hover:bg-yellow-300 transition">
+                        Escolher Foto
+                    </label>
+                </div>
+            </div>
 
-// ============================================================
-// Câmera
-// ============================================================
-async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
-      audio: false
-    });
-    $("video").srcObject = stream;
-    $("btnStart").disabled = true;
-    $("btnCapture").disabled = false;
-    setStatus($("camStatus"), "Câmera ativa. Enquadre o valor e fotografe.");
-  } catch (err) {
-    setStatus($("camStatus"), "Erro ao abrir câmera: " + err.message, "err");
-  }
-}
+            <!-- Overlay de Carregamento (Analisando com Gemini) -->
+            <div id="loadingOverlay" class="hidden absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-20">
+                <div class="w-12 h-12 border-4 border-yellow-400/30 border-t-yellow-400 rounded-full animate-spin mb-3"></div>
+                <p class="font-bold text-sm text-white">Lendo dígitos do taxímetro...</p>
+                <p class="text-xs text-zinc-400 mt-1">Identificando valor LED e tarifa</p>
+            </div>
+        </section>
 
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
-  $("btnStart").disabled = false;
-  $("btnCapture").disabled = true;
-}
+        <!-- Botões Principais de Ação -->
+        <div class="grid grid-cols-1 gap-2.5">
+            <button id="btnCapture" onclick="captureAndRead()" class="w-full py-4 px-6 rounded-2xl bg-yellow-400 hover:bg-yellow-300 active:scale-[0.99] text-zinc-950 font-extrabold text-base sm:text-lg shadow-xl shadow-yellow-400/15 flex items-center justify-center gap-3 transition">
+                <i data-lucide="scan-line" class="w-6 h-6 stroke-[2.5]"></i>
+                <span>Capturar e Ler Taxímetro</span>
+            </button>
 
-// ============================================================
-// OCR com Tesseract.js
-// ============================================================
-async function initOCR() {
-  if (worker) return;
-  setStatus($("ocrStatus"), "Carregando motor de OCR (primeira vez pode demorar)...");
-  worker = await Tesseract.createWorker("eng", 1, {
-    logger: m => {
-      if (m.status === "recognizing text") {
-        setStatus($("ocrStatus"), `Lendo... ${Math.round((m.progress || 0) * 100)}%`);
-      }
-    }
-  });
-  // Configura para reconhecer apenas dígitos, ponto e vírgula
-  await worker.setParameters({
-    tessedit_char_whitelist: "0123456789.,",
-    tessedit_pageseg_mode: "7" // single line
-  });
-  tesseractReady = true;
-}
+            <!-- Botão para voltar ao vídeo ao vivo após tirar foto -->
+            <button id="btnRetake" onclick="resetToLiveCamera()" class="hidden w-full py-3 px-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 active:scale-[0.99] text-zinc-100 font-semibold text-sm flex items-center justify-center gap-2 transition border border-zinc-700">
+                <i data-lucide="camera" class="w-4 h-4 text-yellow-400"></i>
+                <span>Voltar para Câmera ao Vivo</span>
+            </button>
+        </div>
 
-async function captureAndRead() {
-  const video = $("video");
-  if (!video.videoWidth) return;
+        <!-- Card de Resultado Extraído -->
+        <section id="resultCard" class="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 sm:p-5 shadow-xl transition-all">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Resultado da Leitura
+                </span>
+                <span id="confidenceBadge" class="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
+                    Aguardando captura
+                </span>
+            </div>
 
-  // Captura frame
-  const canvas = $("preview");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(video, 0, 0);
+            <!-- Visor Principal do Valor + Tarifa -->
+            <div class="grid grid-cols-3 gap-3 mb-4">
+                <!-- Campo do Valor (2/3) -->
+                <div class="col-span-2 bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <label for="extractedValueInput" class="text-[11px] font-semibold text-zinc-400 uppercase">Valor (Texto Puro)</label>
+                        <span id="formattedCurrency" class="text-xs font-semibold text-emerald-400">R$ 0,00</span>
+                    </div>
+                    <div class="flex items-baseline gap-1 mt-1">
+                        <input 
+                            type="text" 
+                            id="extractedValueInput" 
+                            inputmode="decimal"
+                            placeholder="0.00" 
+                            value=""
+                            oninput="onManualValueEdit(this.value)"
+                            class="w-full bg-transparent font-mono text-3xl sm:text-4xl font-bold text-red-500 led-glow focus:outline-none focus:ring-2 focus:ring-yellow-400/50 rounded-lg px-1 -mx-1"
+                        />
+                    </div>
+                    <span class="text-[10px] text-zinc-500 mt-1">Toque no número acima se precisar corrigir</span>
+                </div>
 
-  stopCamera();
-  showStep("stepProcessing");
-  setStatus($("ocrStatus"), "Preparando OCR...");
+                <!-- Campo da Tarifa (1/3) -->
+                <div class="col-span-1 bg-zinc-950 border border-zinc-800 rounded-2xl p-3.5 flex flex-col justify-between">
+                    <label for="extractedTariffInput" class="text-[11px] font-semibold text-zinc-400 uppercase">Tarifa</label>
+                    <input 
+                        type="text" 
+                        id="extractedTariffInput" 
+                        placeholder="-" 
+                        value=""
+                        class="w-full bg-transparent font-mono text-3xl sm:text-4xl font-bold text-amber-400 text-center focus:outline-none focus:ring-2 focus:ring-yellow-400/50 rounded-lg my-auto"
+                    />
+                    <span class="text-[10px] text-zinc-500 text-center">Bandeira</span>
+                </div>
+            </div>
 
-  // Pré-processamento: recorta região central (onde está o guia) e converte para cinza/alto contraste
-  const crop = cropCenter(canvas, 0.7, 0.34);
-  const processed = preprocess(crop);
+            <!-- Botão Grande de Copiar Valor -->
+            <button id="btnCopyValue" onclick="copyCurrentValue()" class="w-full py-3.5 px-5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.99] text-zinc-950 font-bold text-base flex items-center justify-center gap-2.5 transition shadow-lg shadow-emerald-500/10">
+                <i id="copyIcon" data-lucide="copy" class="w-5 h-5 stroke-[2.5]"></i>
+                <span id="copyBtnText">Copiar Valor (ex: 63.50)</span>
+            </button>
+        </section>
 
-  try {
-    await initOCR();
-    setStatus($("ocrStatus"), "Lendo o valor...");
-    const { data } = await worker.recognize(processed);
-    const raw = (data.text || "").trim();
-    console.log("OCR raw:", raw);
-    const valor = parseValor(raw);
-    goToValue(valor, raw);
-  } catch (err) {
-    console.error(err);
-    goToValue(null, "Erro no OCR: " + err.message);
-  }
-}
+        <!-- Histórico Rápido da Sessão -->
+        <section class="bg-zinc-900/60 border border-zinc-800/80 rounded-3xl p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                    <i data-lucide="history" class="w-4 h-4 text-yellow-400"></i>
+                    Histórico desta Sessão
+                </h2>
+                <button id="btnClearHistory" onclick="clearHistory()" class="hidden text-xs text-zinc-500 hover:text-red-400 transition">
+                    Limpar
+                </button>
+            </div>
 
-// Recorta a região central (mesma do guia na tela)
-function cropCenter(canvas, wPct, hPct) {
-  const cw = canvas.width * wPct;
-  const ch = canvas.height * hPct;
-  const x = (canvas.width - cw) / 2;
-  const y = (canvas.height - ch) / 2;
-  const out = document.createElement("canvas");
-  out.width = cw;
-  out.height = ch;
-  out.getContext("2d").drawImage(canvas, x, y, cw, ch, 0, 0, cw, ch);
-  return out;
-}
+            <div id="historyList" class="space-y-2">
+                <p id="emptyHistoryText" class="text-xs text-zinc-500 text-center py-4">
+                    Nenhuma leitura realizada ainda. Aponte a câmera para o taxímetro e capture.
+                </p>
+            </div>
+        </section>
 
-// Converte para escala de cinza + binarização simples
-function preprocess(srcCanvas) {
-  const c = document.createElement("canvas");
-  c.width = srcCanvas.width;
-  c.height = srcCanvas.height;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(srcCanvas, 0, 0);
-  const img = ctx.getImageData(0, 0, c.width, c.height);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    const v = gray > 128 ? 255 : 0;
-    d[i] = d[i+1] = d[i+2] = v;
-  }
-  ctx.putImageData(img, 0, 0);
-  return c;
-}
+    </main>
 
-// Interpreta o texto do OCR como valor monetário
-function parseValor(text) {
-  if (!text) return null;
-  // Remove tudo que não for dígito, ponto ou vírgula
-  let t = text.replace(/[^0-9.,]/g, "");
-  // Casos: "12.50", "12,50", "1250", "12.5"
-  // Se tem vírgula e ponto, assume que o último é decimal
-  if (t.includes(",") && t.includes(".")) {
-    t = t.replace(/\./g, "").replace(",", ".");
-  } else if (t.includes(",")) {
-    t = t.replace(",", ".");
-  } else if (t.includes(".")) {
-    // Se o ponto estiver no meio e houver 1 ou 2 dígitos depois, é decimal
-    const parts = t.split(".");
-    if (parts.length === 2 && parts[1].length <= 2) {
-      // mantém
-    } else {
-      t = t.replace(/\./g, "");
-    }
-  } else {
-    // Só dígitos: assume centavos se >= 3 dígitos? Não — deixa como inteiro
-    // Ex: "1250" -> 12.50 é ambíguo. Vamos tratar como reais.
-    // Se você quiser assumir centavos, descomente:
-    // if (t.length >= 3) t = t.slice(0, -2) + "." + t.slice(-2);
-  }
-  const n = parseFloat(t);
-  if (isNaN(n) || n <= 0) return null;
-  // Limite de sanidade
-  if (n > 10000) return null;
-  return n;
-}
+    <!-- Rodapé discreto -->
+    <footer class="text-center py-4 px-4 text-[11px] text-zinc-600">
+        Dica: Mantenha o visor do taxímetro dentro da área pontilhada para leitura rápida.
+    </footer>
 
-function goToValue(valor, raw) {
-  showStep("stepValue");
-  const input = $("valor");
-  const status = $("valueStatus");
-  if (valor) {
-    input.value = valor.toFixed(2);
-    setStatus(status, `Valor lido: R$ ${valor.toFixed(2)}. Confira e ajuste se necessário.`, "ok");
-  } else {
-    input.value = "";
-    setStatus(status, "Não foi possível ler o valor. Digite manualmente.", "err");
-  }
-  $("btnGenerate").disabled = false;
-  setTimeout(() => input.focus(), 200);
-}
+    <script>
+        // Inicializa ícones Lucide
+        lucide.createIcons();
 
-// ============================================================
-// Geração do Pix (BR Code / EMV)
-// ============================================================
-function emv(id, value) {
-  const len = value.length.toString().padStart(2, "0");
-  return id + len + value;
-}
+        // Variáveis globais de estado
+        let currentStream = null;
+        let usingFrontCamera = false;
+        let sessionHistory = [];
+        const apiKey = ""; // Fornecido automaticamente pelo ambiente em tempo de execução
 
-function crc16(payload) {
-  let crc = 0xFFFF;
-  for (let i = 0; i < payload.length; i++) {
-    crc ^= payload.charCodeAt(i) << 8;
-    for (let j = 0; j < 8; j++) {
-      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
-      crc &= 0xFFFF;
-    }
-  }
-  return crc.toString(16).toUpperCase().padStart(4, "0");
-}
+        // Elementos do DOM
+        const videoEl = document.getElementById('cameraVideo');
+        const previewEl = document.getElementById('capturedPreview');
+        const canvasEl = document.getElementById('captureCanvas');
+        const overlayEl = document.getElementById('cameraOverlay');
+        const fallbackEl = document.getElementById('cameraFallback');
+        const loadingEl = document.getElementById('loadingOverlay');
+        const scanLineEl = document.getElementById('scanLine');
+        const btnCapture = document.getElementById('btnCapture');
+        const btnRetake = document.getElementById('btnRetake');
+        const valueInput = document.getElementById('extractedValueInput');
+        const tariffInput = document.getElementById('extractedTariffInput');
+        const formattedCurrencyEl = document.getElementById('formattedCurrency');
+        const confidenceBadgeEl = document.getElementById('confidenceBadge');
 
-function sanitize(s, max) {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9 ]/g, "").toUpperCase().slice(0, max);
-}
+        /**
+         * Exibe banner de aviso/erro amigável na interface (sem usar alert)
+         */
+        function showToast(message, type = 'info') {
+            const banner = document.getElementById('toastBanner');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = document.getElementById('toastIcon');
 
-function buildPixPayload({ key, name, city, amount, description }) {
-  // Merchant Account Information (ID 26)
-  const gui = emv("00", "br.gov.bcb.pix");
-  const chave = emv("01", key);
-  let mai = gui + chave;
-  if (description) mai += emv("02", sanitize(description, 40));
-  const maiField = emv("26", mai);
+            banner.classList.remove('hidden', 'bg-red-950/80', 'border-red-800', 'text-red-200', 'bg-emerald-950/80', 'border-emerald-800', 'text-emerald-200', 'bg-zinc-900', 'border-zinc-700', 'text-zinc-200');
 
-  const payloadFormat = emv("00", "01");
-  const merchantCategory = emv("52", "0000");
-  const currency = emv("53", "986");
-  const amountField = emv("54", amount.toFixed(2));
-  const country = emv("58", "BR");
-  const merchantName = emv("59", sanitize(name, 25));
-  const merchantCity = emv("60", sanitize(city, 15));
-  const additional = emv("62", emv("05", "***")); // txid
-  const crcId = "6304";
+            if (type === 'error') {
+                banner.classList.add('bg-red-950/80', 'border-red-800', 'text-red-200');
+                iconEl.setAttribute('data-lucide', 'alert-circle');
+            } else if (type === 'success') {
+                banner.classList.add('bg-emerald-950/80', 'border-emerald-800', 'text-emerald-200');
+                iconEl.setAttribute('data-lucide', 'check-circle-2');
+            } else {
+                banner.classList.add('bg-zinc-900', 'border-zinc-700', 'text-zinc-200');
+                iconEl.setAttribute('data-lucide', 'info');
+            }
 
-  const base = payloadFormat + maiField + merchantCategory + currency + amountField + country + merchantName + merchantCity + additional + crcId;
-  const crc = crc16(base);
-  return base + crc;
-}
+            msgEl.textContent = message;
+            lucide.createIcons();
+        }
 
-async function generateQR(amount) {
-  const payload = buildPixPayload({
-    key: PIX_CONFIG.key,
-    name: PIX_CONFIG.name,
-    city: PIX_CONFIG.city,
-    amount,
-    description: PIX_CONFIG.description
-  });
-  console.log("Pix payload:", payload);
+        function hideToast() {
+            document.getElementById('toastBanner').classList.add('hidden');
+        }
 
-  const box = $("qrBox");
-  box.innerHTML = "";
-  const canvas = document.createElement("canvas");
-  box.appendChild(canvas);
-  await QRCode.toCanvas(canvas, payload, { width: 260, margin: 1, errorCorrectionLevel: "M" });
+        /**
+         * Inicia a câmera (priorizando a traseira 'environment')
+         */
+        async function startCamera() {
+            hideToast();
+            fallbackEl.classList.add('hidden');
+            previewEl.classList.add('hidden');
+            videoEl.classList.remove('hidden');
+            overlayEl.classList.remove('hidden');
+            btnRetake.classList.add('hidden');
 
-  $("pixCode").textContent = payload;
-  return payload;
-}
+            // Encerra stream anterior se existir
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
 
-// ============================================================
-// Eventos
-// ============================================================
-$("btnStart").addEventListener("click", startCamera);
-$("btnCapture").addEventListener("click", captureAndRead);
-$("btnRetake").addEventListener("click", () => {
-  stopCamera();
-  showStep("stepCamera");
-  setStatus($("camStatus"), "Enquadre o valor do taxímetro e toque em Fotografar.");
-});
-$("btnGenerate").addEventListener("click", async () => {
-  const v = parseFloat($("valor").value);
-  if (isNaN(v) || v <= 0) {
-    setStatus($("valueStatus"), "Digite um valor válido.", "err");
-    return;
-  }
-  showStep("stepQR");
-  await generateQR(v);
-});
-$("btnCopy").addEventListener("click", async () => {
-  const code = $("pixCode").textContent;
-  try {
-    await navigator.clipboard.writeText(code);
-    setStatus($("qrStatus"), "Código Pix copiado!", "ok");
-  } catch {
-    // fallback
-    const ta = document.createElement("textarea");
-    ta.value = code; document.body.appendChild(ta); ta.select();
-    document.execCommand("copy"); document.body.removeChild(ta);
-    setStatus($("qrStatus"), "Código Pix copiado!", "ok");
-  }
-});
-$("btnNew").addEventListener("click", () => {
-  $("valor").value = "";
-  $("qrBox").innerHTML = "";
-  $("pixCode").textContent = "";
-  showStep("stepCamera");
-  setStatus($("camStatus"), "Enquadre o valor do taxímetro e toque em Fotografar.");
-  setStatus($("valueStatus"), "");
-  setStatus($("qrStatus"), "Mostre o QR Code para o passageiro.", "ok");
-});
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showCameraError("Seu navegador não suporta acesso direto à câmera. Use o botão 'Galeria' para tirar ou escolher uma foto.");
+                return;
+            }
 
-// Fallback: se a câmera não abrir, permite digitar direto
-window.addEventListener("load", () => {
-  showStep("stepCamera");
-});
-</script>
+            const constraints = {
+                audio: false,
+                video: {
+                    facingMode: usingFrontCamera ? 'user' : { ideal: 'environment' },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                }
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = currentStream;
+                await videoEl.play();
+            } catch (err) {
+                // Fallback genérico caso 'environment' falhe em notebooks/desktops
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    videoEl.srcObject = currentStream;
+                    await videoEl.play();
+                } catch (fallbackErr) {
+                    showCameraError("Não foi possível acessar a câmera. Verifique as permissões do navegador ou envie uma foto pela galeria.");
+                }
+            }
+        }
+
+        function showCameraError(msg) {
+            videoEl.classList.add('hidden');
+            overlayEl.classList.add('hidden');
+            fallbackEl.classList.remove('hidden');
+            document.getElementById('cameraErrorText').textContent = msg;
+        }
+
+        function toggleCamera() {
+            usingFrontCamera = !usingFrontCamera;
+            startCamera();
+        }
+
+        function resetToLiveCamera() {
+            previewEl.classList.add('hidden');
+            btnRetake.classList.add('hidden');
+            if (currentStream && currentStream.active) {
+                videoEl.classList.remove('hidden');
+                overlayEl.classList.remove('hidden');
+            } else {
+                startCamera();
+            }
+        }
+
+        /**
+         * Captura o frame atual do vídeo e envia para análise
+         */
+        async function captureAndRead() {
+            // Se já estiver exibindo uma imagem estática (da galeria ou captura anterior) e o usuário clicar novamente, reanalisa
+            if (!previewEl.classList.contains('hidden') && previewEl.src.startsWith('data:image')) {
+                const base64Data = previewEl.src.split(',')[1];
+                const mimeType = previewEl.src.substring(5, previewEl.src.indexOf(';'));
+                await processImageWithGemini(base64Data, mimeType);
+                return;
+            }
+
+            if (!videoEl.srcObject || videoEl.readyState < 2) {
+                showToast("A câmera ainda não está pronta. Aguarde um instante ou selecione uma foto da galeria.", "error");
+                return;
+            }
+
+            // Configura o canvas com a resolução real do vídeo para máxima nitidez nos LEDs
+            const width = videoEl.videoWidth;
+            const height = videoEl.videoHeight;
+            canvasEl.width = width;
+            canvasEl.height = height;
+
+            const ctx = canvasEl.getContext('2d');
+            ctx.drawImage(videoEl, 0, 0, width, height);
+
+            // Converte para JPEG de alta qualidade
+            const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
+            const base64Data = dataUrl.split(',')[1];
+
+            // Congela a imagem na tela para o usuário conferir o que foi fotografado
+            previewEl.src = dataUrl;
+            previewEl.classList.remove('hidden');
+            videoEl.classList.add('hidden');
+            overlayEl.classList.add('hidden');
+            btnRetake.classList.remove('hidden');
+
+            await processImageWithGemini(base64Data, 'image/jpeg');
+        }
+
+        /**
+         * Lida com upload de imagem da galeria ou câmera nativa do sistema
+         */
+        function handleFileUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            hideToast();
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const img = new Image();
+                img.onload = async function() {
+                    // Redimensiona se for extremamente grande (> 2000px) mantendo proporção para envio rápido
+                    const maxDim = 1800;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+
+                    canvasEl.width = w;
+                    canvasEl.height = h;
+                    const ctx = canvasEl.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+
+                    const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
+                    const base64Data = dataUrl.split(',')[1];
+
+                    previewEl.src = dataUrl;
+                    previewEl.classList.remove('hidden');
+                    videoEl.classList.add('hidden');
+                    overlayEl.classList.add('hidden');
+                    fallbackEl.classList.add('hidden');
+                    btnRetake.classList.remove('hidden');
+
+                    await processImageWithGemini(base64Data, 'image/jpeg');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            // Limpa o input para permitir selecionar a mesma imagem novamente se desejar
+            event.target.value = '';
+        }
+
+        /**
+         * Envia a imagem base64 para a API do Gemini com JSON Schema estruturado
+         * e retentativas com exponential backoff
+         */
+        async function processImageWithGemini(base64ImageData, mimeType) {
+            setLoadingState(true);
+            hideToast();
+
+            const promptText = `Analise esta imagem de um taxímetro digital brasileiro.
+            Identifique com máxima precisão:
+            1. O valor monetário exibido no visor principal em LED vermelho (geralmente próximo a "R$" e "PREÇO A PAGAR", formato 7 segmentos). Retorne no formato decimal padrão usando ponto como separador e sempre duas casas decimais (exemplo: "63.50", "14.80", "125.00").
+            2. O número da tarifa / bandeira exibido no visor menor (geralmente próximo a "TARIFA", ex: "1" ou "2"). Se não estiver visível, retorne "".
+            3. Se não houver nenhum taxímetro legível na imagem, defina "encontrado" como false.`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: promptText },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: base64ImageData
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            encontrado: {
+                                type: "BOOLEAN",
+                                description: "Verdadeiro se um taxímetro com números legíveis foi encontrado na foto."
+                            },
+                            valor: {
+                                type: "STRING",
+                                description: "Valor numérico extraído com ponto decimal e 2 casas, ex: '63.50'."
+                            },
+                            tarifa: {
+                                type: "STRING",
+                                description: "Número da tarifa/bandeira, ex: '1' ou '2'."
+                            },
+                            observacao: {
+                                type: "STRING",
+                                description: "Breve nota caso haja reflexo ou dúvida em algum dígito."
+                            }
+                        },
+                        required: ["encontrado", "valor", "tarifa"]
+                    }
+                }
+            };
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const data = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!rawText) {
+                    throw new Error("Resposta vazia da IA.");
+                }
+
+                const parsed = JSON.parse(rawText);
+
+                if (!parsed.encontrado || !parsed.valor) {
+                    confidenceBadgeEl.textContent = "Não identificado";
+                    confidenceBadgeEl.className = "text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-red-950 text-red-300 border border-red-800";
+                    showToast("Não foi possível ler os números do taxímetro. Tente aproximar mais a câmera ou evitar reflexos.", "error");
+                } else {
+                    // Normaliza o valor (garante ponto decimal e 2 casas caso venha com vírgula)
+                    let cleanVal = parsed.valor.replace(',', '.').replace(/[^0-9.]/g, '');
+                    if (cleanVal && !isNaN(parseFloat(cleanVal))) {
+                        cleanVal = parseFloat(cleanVal).toFixed(2);
+                    }
+
+                    valueInput.value = cleanVal;
+                    tariffInput.value = parsed.tarifa || "-";
+                    updateFormattedCurrency(cleanVal);
+
+                    confidenceBadgeEl.textContent = "Leitura concluída";
+                    confidenceBadgeEl.className = "text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800";
+
+                    // Adiciona ao histórico da sessão
+                    addToHistory(cleanVal, parsed.tarifa || "-");
+
+                    // Atualiza texto do botão de cópia
+                    document.getElementById('copyBtnText').textContent = `Copiar Valor (${cleanVal})`;
+                }
+
+            } catch (error) {
+                showToast("Erro ao processar a imagem. Verifique sua conexão e tente novamente.", "error");
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        /**
+         * Chamada Fetch com Exponential Backoff (1s, 2s, 4s, 8s, 16s)
+         */
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            let delay = 1000;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        if (response.status === 429 || response.status >= 500) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        const errBody = await response.text();
+                        throw new Error(`Erro na API: ${response.status} - ${errBody}`);
+                    }
+                    return await response.json();
+                } catch (err) {
+                    if (attempt === maxRetries - 1) throw err;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function setLoadingState(isLoading) {
+            if (isLoading) {
+                loadingEl.classList.remove('hidden');
+                scanLineEl.classList.remove('hidden');
+                btnCapture.disabled = true;
+                btnCapture.classList.add('opacity-60', 'cursor-not-allowed');
+            } else {
+                loadingEl.classList.add('hidden');
+                scanLineEl.classList.add('hidden');
+                btnCapture.disabled = false;
+                btnCapture.classList.remove('opacity-60', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Atualiza a exibição formatada em Reais (R$ 63,50) quando o usuário edita o campo
+         */
+        function onManualValueEdit(val) {
+            const normalized = val.replace(',', '.');
+            updateFormattedCurrency(normalized);
+            const displayVal = normalized.trim() || '0.00';
+            document.getElementById('copyBtnText').textContent = `Copiar Valor (${displayVal})`;
+        }
+
+        function updateFormattedCurrency(numericString) {
+            const num = parseFloat(numericString);
+            if (!isNaN(num)) {
+                formattedCurrencyEl.textContent = num.toLocaleString('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL'
+                });
+            } else {
+                formattedCurrencyEl.textContent = 'R$ 0,00';
+            }
+        }
+
+        /**
+         * Copia o valor puro (ex: 63.50) para a área de transferência usando execCommand
+         */
+        function copyTextToClipboard(text, buttonFeedback = true) {
+            if (!text) {
+                showToast("Nenhum valor disponível para copiar.", "error");
+                return;
+            }
+
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            tempInput.setSelectionRange(0, 99999);
+
+            try {
+                document.execCommand('copy');
+                if (buttonFeedback) {
+                    const btn = document.getElementById('btnCopyValue');
+                    const btnText = document.getElementById('copyBtnText');
+                    const originalText = btnText.textContent;
+
+                    btn.classList.remove('bg-emerald-500', 'hover:bg-emerald-400');
+                    btn.classList.add('bg-white', 'text-zinc-950');
+                    btnText.textContent = `Copiado! (${text})`;
+
+                    setTimeout(() => {
+                        btn.classList.add('bg-emerald-500', 'hover:bg-emerald-400');
+                        btn.classList.remove('bg-white');
+                        btnText.textContent = originalText;
+                    }, 1800);
+                } else {
+                    showToast(`Valor "${text}" copiado para a área de transferência!`, "success");
+                }
+            } catch (err) {
+                showToast("Não foi possível copiar automaticamente. Selecione o número e copie manualmente.", "error");
+            } finally {
+                document.body.removeChild(tempInput);
+            }
+        }
+
+        function copyCurrentValue() {
+            const val = valueInput.value.trim().replace(',', '.');
+            copyTextToClipboard(val, true);
+        }
+
+        /**
+         * Gerenciamento do Histórico Rápido da Sessão
+         */
+        function addToHistory(valor, tarifa) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            sessionHistory.unshift({
+                id: Date.now(),
+                valor,
+                tarifa,
+                time: timeStr
+            });
+
+            // Mantém os últimos 10 registros
+            if (sessionHistory.length > 10) {
+                sessionHistory.pop();
+            }
+
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const listEl = document.getElementById('historyList');
+            const clearBtn = document.getElementById('btnClearHistory');
+
+            if (sessionHistory.length === 0) {
+                clearBtn.classList.add('hidden');
+                listEl.innerHTML = `<p id="emptyHistoryText" class="text-xs text-zinc-500 text-center py-4">Nenhuma leitura realizada ainda. Aponte a câmera para o taxímetro e capture.</p>`;
+                return;
+            }
+
+            clearBtn.classList.remove('hidden');
+            listEl.innerHTML = sessionHistory.map(item => `
+                <div class="flex items-center justify-between bg-zinc-950/90 border border-zinc-800/90 rounded-2xl px-3.5 py-2.5">
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono text-lg font-bold text-red-400">${item.valor}</span>
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                            Tarifa ${item.tarifa}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-[11px] text-zinc-500 font-mono">${item.time}</span>
+                        <button onclick="copyTextToClipboard('${item.valor}', false)" class="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white active:scale-95 transition border border-zinc-800" title="Copiar ${item.valor}">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function clearHistory() {
+            sessionHistory = [];
+            renderHistory();
+        }
+
+        // Inicia a câmera automaticamente ao abrir a página
+        window.addEventListener('DOMContentLoaded', () => {
+            startCamera();
+        });
+    </script>
 </body>
 </html>
